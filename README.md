@@ -37,3 +37,16 @@ uvicorn main:app --reload --port 8000
 
 - Dev deps: pip install -r requirements-dev.txt
 - Run: pytest -q
+
+## Streamlit UI
+
+- Install deps (already in requirements.txt):
+  pip install -r requirements.txt
+
+- Start API:
+  uvicorn main:app --reload --port 8123
+
+- Start UI:
+  streamlit run streamlit_app.py
+
+- The app posts to http://127.0.0.1:8123/scrape by default. You can change the endpoint in the textbox or set env var SCRAPER_ENDPOINT.

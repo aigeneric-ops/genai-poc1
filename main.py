@@ -1,75 +1,90 @@
 import os
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 from typing import Optional
 
-# Load .env if present
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
 try:
     from dotenv import load_dotenv  # type: ignore
     load_dotenv()
 except Exception:
     pass
 
-# OpenAI SDK (>=1.0)
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None  # Allows the app to start without the package (for CI/lint)
+import re
+import httpx
+from bs4 import BeautifulSoup  # type: ignore
 
-app = FastAPI(title="genai-poc1 FastAPI + OpenAI", version="0.1.1")
+app = FastAPI(title="genai-poc1 FastAPI (feature2)", version="0.2.0")
 
-
-class ChatRequest(BaseModel):
-    prompt: str
-    system: Optional[str] = None
-    model: Optional[str] = "gpt-4o-mini"
-    temperature: Optional[float] = 0.7
-    max_tokens: Optional[int] = 512
+WIKI_BASE = "https://en.wikipedia.org"
+DEFAULT_TITLE = "Generative_artificial_intelligence"  # "generative ai" page
 
 
-class ChatResponse(BaseModel):
-    model: str
-    output: str
+class ScrapeRequest(BaseModel):
+    title: Optional[str] = None  # Wikipedia page title, e.g., "Generative_artificial_intelligence"
+    max_chars: int = 3000
+
+
+class ScrapeResponse(BaseModel):
+    title: str
+    url: str
+    content: str
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict:
     return {"ok": True}
 
 
-@app.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
-    if OpenAI is None:
-        raise HTTPException(status_code=500, detail="openai package not installed. pip install -r requirements.txt")
+def normalize_title(query: Optional[str]) -> str:
+    if not query:
+        return DEFAULT_TITLE
+    # Convert loose phrases like "generative ai" -> "Generative_ai"
+    t = re.sub(r"\s+", "_", query.strip())
+    # Capitalize first letter of words separated by underscores
+    t = "_".join([s[:1].upper() + s[1:] if s else s for s in t.split("_")])
+    return t
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY not set. Create a .env with OPENAI_API_KEY=... or export it in the environment.")
+
+def extract_main_content(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    content = soup.select_one("#mw-content-text .mw-parser-output")
+    if not content:
+        return ""
+    parts = []
+    for el in content.find_all(["p", "h2", "h3"], recursive=False):
+        text = el.get_text(" ", strip=True)
+        if text:
+            parts.append(text)
+    text = "\n\n".join(parts)
+    # Basic cleanup
+    text = re.sub(r"\[\d+\]", "", text)  # remove reference markers like [1]
+    return text
+
+
+@app.post("/scrape", response_model=ScrapeResponse)
+async def scrape(req: ScrapeRequest) -> ScrapeResponse:
+    title = normalize_title(req.title)
+    url = f"{WIKI_BASE}/wiki/{title}"
 
     try:
-        client = OpenAI(api_key=api_key)
-
-        # Compose messages for a standard Chat Completions call
-        messages = []
-        if req.system:
-            messages.append({"role": "system", "content": req.system})
-        messages.append({"role": "user", "content": req.prompt})
-
-        completion = client.chat.completions.create(
-            model=req.model or "gpt-4o-mini",
-            messages=messages,
-            temperature=req.temperature,
-            max_tokens=req.max_tokens,
-        )
-
-        output = completion.choices[0].message.content or ""
-        return ChatResponse(model=req.model or "gpt-4o-mini", output=output)
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.get(url, headers={"User-Agent": "genai-poc1/0.2 (+fastapi)"})
+            if r.status_code != 200:
+                raise HTTPException(status_code=404, detail=f"Wikipedia page not found: {title}")
+            content = extract_main_content(r.text)
+            if not content:
+                raise HTTPException(status_code=500, detail="Failed to extract page content")
+            if req.max_chars and len(content) > req.max_chars:
+                content = content[: req.max_chars] + "…"
+            return ScrapeResponse(title=title, url=url, content=content)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # Local dev: uvicorn main:app --reload --port 8000
 if __name__ == "__main__":
-    # Lazy import to avoid uvicorn dependency at import time
     import uvicorn  # type: ignore
     uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)), reload=True)

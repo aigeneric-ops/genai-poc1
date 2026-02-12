@@ -52,14 +52,30 @@ def extract_main_content(html: str) -> str:
     content = soup.select_one("#mw-content-text .mw-parser-output")
     if not content:
         return ""
+
+    # Collect paragraphs and headings broadly (not just top-level) but avoid tables/infoboxes/navboxes
+    blacklist = {"infobox", "vertical-navbox", "navbox", "metadata", "mbox"}
     parts = []
-    for el in content.find_all(["p", "h2", "h3"], recursive=False):
+    for el in content.select("p, h2, h3"):
+        # Skip if inside blacklisted containers
+        skip = False
+        for parent in el.parents:
+            classes = parent.get("class") or []
+            if any(cls in blacklist for cls in classes):
+                skip = True
+                break
+            if parent.name in {"table", "figure", "aside"}:
+                skip = True
+                break
+        if skip:
+            continue
         text = el.get_text(" ", strip=True)
         if text:
             parts.append(text)
+
     text = "\n\n".join(parts)
-    # Basic cleanup
-    text = re.sub(r"\[\d+\]", "", text)  # remove reference markers like [1]
+    # Basic cleanup: remove reference markers like [1], [2]
+    text = re.sub(r"\s*\[\d+\]", "", text)
     return text
 
 

@@ -1,6 +1,9 @@
 # genai-poc1
 
-FastAPI + OpenAI chat endpoint.
+FastAPI project with:
+- OpenAI client wrapper (OpenAI.py)
+- Wikipedia scraper endpoint (/scrape)
+- Chat endpoint (feature1 history)
 
 ## Setup
 
@@ -10,7 +13,7 @@ FastAPI + OpenAI chat endpoint.
 2) Install deps:
    pip install -r requirements.txt
 
-3) Configure environment:
+3) Configure environment (only needed for OpenAI):
    cp .env.example .env
    # edit .env and set OPENAI_API_KEY=sk-...
 
@@ -18,8 +21,19 @@ FastAPI + OpenAI chat endpoint.
 
 uvicorn main:app --reload --port 8000
 
-## Test
+## Use
 
-curl -X POST http://localhost:8000/chat \
-  -H 'Content-Type: application/json' \
-  -d '{"prompt":"Say hello from FastAPI","system":"Be concise","model":"gpt-4o-mini"}'
+- Scrape Generative AI page (default):
+  curl -X POST http://localhost:8000/scrape \
+    -H 'Content-Type: application/json' \
+    -d '{"max_chars": 800}'
+
+- Scrape custom title:
+  curl -X POST http://localhost:8000/scrape \
+    -H 'Content-Type: application/json' \
+    -d '{"title":"Large language model","max_chars": 800}'
+
+## Tests
+
+- Dev deps: pip install -r requirements-dev.txt
+- Run: pytest -q

@@ -3,13 +3,20 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
+# Load .env if present
+try:
+    from dotenv import load_dotenv  # type: ignore
+    load_dotenv()
+except Exception:
+    pass
+
 # OpenAI SDK (>=1.0)
 try:
     from openai import OpenAI
 except ImportError:
     OpenAI = None  # Allows the app to start without the package (for CI/lint)
 
-app = FastAPI(title="genai-poc1 FastAPI + OpenAI", version="0.1.0")
+app = FastAPI(title="genai-poc1 FastAPI + OpenAI", version="0.1.1")
 
 
 class ChatRequest(BaseModel):
@@ -33,11 +40,11 @@ async def health():
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     if OpenAI is None:
-        raise HTTPException(status_code=500, detail="openai package not installed. pip install openai fastapi uvicorn pydantic")
+        raise HTTPException(status_code=500, detail="openai package not installed. pip install -r requirements.txt")
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY env var not set")
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY not set. Create a .env with OPENAI_API_KEY=... or export it in the environment.")
 
     try:
         client = OpenAI(api_key=api_key)

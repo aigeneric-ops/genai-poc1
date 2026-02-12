@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+# Keep real secrets local, but allow sample files
+.env
+
+# macOS
+.DS_Store

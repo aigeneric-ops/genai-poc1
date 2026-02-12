@@ -39,10 +39,11 @@ async def health() -> dict:
 def normalize_title(query: Optional[str]) -> str:
     if not query:
         return DEFAULT_TITLE
-    # Convert loose phrases like "generative ai" -> "Generative_ai"
+    # Replace spaces with underscores, preserve original casing except first char
     t = re.sub(r"\s+", "_", query.strip())
-    # Capitalize first letter of words separated by underscores
-    t = "_".join([s[:1].upper() + s[1:] if s else s for s in t.split("_")])
+    # Only capitalize the very first character of the whole title (Wikipedia is case-sensitive beyond first char)
+    if t:
+        t = t[0:1].upper() + t[1:]
     return t
 
 
